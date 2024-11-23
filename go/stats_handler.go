@@ -146,6 +146,12 @@ func getUserStatisticsHandler(c echo.Context) error {
 	}
 
 	var userTips []UserTip
+	query, args, err = sqlx.In(query, userIDs)
+	if err != nil {
+		log.Error("failed getUserStatisticsHandler tips: ", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to prepare query: "+err.Error())
+	}
+
 	if err := tx.SelectContext(ctx, &userTips, query, args...); err != nil {
 		log.Error("failed getUserStatisticsHandler tips: ", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to execute query: "+err.Error())
