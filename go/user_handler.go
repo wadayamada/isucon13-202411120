@@ -17,6 +17,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/gommon/log"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -453,6 +454,7 @@ func fillUserResponseV2(ctx context.Context, tx *sqlx.Tx, userModels []UserModel
 
 	themeModels := []ThemeModel{}
 	if err := tx.SelectContext(ctx, &themeModels, themeSql, args); err != nil {
+		log.Error("fail fillUserResponseV2: ", err)
 		return nil, err
 	}
 	userIdToThemes := make(map[int64]ThemeModel)
@@ -466,6 +468,7 @@ func fillUserResponseV2(ctx context.Context, tx *sqlx.Tx, userModels []UserModel
 
 	iconModels := []IconModel{}
 	if err := tx.SelectContext(ctx, &iconModels, imageSql, args...); err != nil {
+		log.Error("fail fillUserResponseV2: ", err)
 		return nil, err
 	}
 	userIdToIcons := make(map[int64]IconModel)
@@ -475,6 +478,7 @@ func fillUserResponseV2(ctx context.Context, tx *sqlx.Tx, userModels []UserModel
 
 	fallbackImageData, err := os.ReadFile(fallbackImage)
 	if err != nil {
+		log.Error("fail fillUserResponseV2: ", err)
 		return nil, err
 	}
 
