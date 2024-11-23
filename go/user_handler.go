@@ -29,7 +29,7 @@ const (
 	bcryptDefaultCost        = bcrypt.MinCost
 )
 
-var fallbackImage = "../img/NoImage.jpg"
+var fallbackImage, _ = os.ReadFile("../img/NoImage.jpg")
 
 type UserModel struct {
 	ID             int64  `db:"id"`
@@ -114,7 +114,7 @@ func getIconHandler(c echo.Context) error {
 	if cached, found := IconCache.Load(username); found {
 		image = cached.([]byte)
 	} else {
-		image, _ = os.ReadFile(fallbackImage)
+		image = fallbackImage
 	}
 
 	iconHash := sha256.Sum256(image)
@@ -420,7 +420,7 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 	if cached, found := IconCache.Load(userModel.Name); found {
 		image = cached.([]byte)
 	} else {
-		image, _ = os.ReadFile(fallbackImage)
+		image = fallbackImage
 	}
 	iconHash := sha256.Sum256(image)
 
@@ -468,7 +468,7 @@ func fillUserResponseV2(ctx context.Context, tx *sqlx.Tx, userModels []UserModel
 		if cached, found := IconCache.Load(userModel.Name); found {
 			image = cached.([]byte)
 		} else {
-			image, _ = os.ReadFile(fallbackImage)
+			image = fallbackImage
 		}
 		iconHash := sha256.Sum256(image)
 
