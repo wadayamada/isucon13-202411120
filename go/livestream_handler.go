@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -478,7 +479,6 @@ func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModels [
 	var userIdList []int64
 	userIdToUserModelMap := make(map[int64]UserModel)
 	var livestreamIDList []int64
-	livestreamIdToLiveStreamTagsMap := make(map[int64][]*LivestreamTagModel)
 	var tagIdList []int64
 	tagIdToTagMap := make(map[int64]Tag)
 	livestreamIdToTagsMap := make(map[int64][]Tag)
@@ -506,7 +506,6 @@ func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModels [
 		return livestreams, err
 	}
 	for i := range livestreamTagModels {
-		livestreamIdToLiveStreamTagsMap[livestreamTagModels[i].LivestreamID] = append(livestreamIdToLiveStreamTagsMap[livestreamTagModels[i].LivestreamID], livestreamTagModels[i])
 		tagIdList = append(tagIdList, livestreamTagModels[i].TagID)
 	}
 
@@ -525,18 +524,14 @@ func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModels [
 				Name: tagModel.Name,
 			}
 		}
-
-		for livestreamId, models := range livestreamIdToLiveStreamTagsMap {
-			for _, model := range models {
-				livestreamIdToTagsMap[livestreamId] = append(livestreamIdToTagsMap[livestreamId], tagIdToTagMap[model.TagID])
-			}
+		for _, livestreamTag := range livestreamTagModels {
+			livestreamIdToTagsMap[livestreamTag.LivestreamID] = append(livestreamIdToTagsMap[livestreamTag.LivestreamID], tagIdToTagMap[livestreamTag.TagID])
 		}
 	}
 
 	for i, livestreamModel := range livestreamModels {
 		owner, err := fillUserResponse(ctx, tx, userIdToUserModelMap[livestreamModel.UserID])
 		if err != nil {
-			livestreams[i] = Livestream{}
 			return livestreams, err
 		}
 		tags := []Tag{}
