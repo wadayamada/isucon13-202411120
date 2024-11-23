@@ -17,6 +17,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/gommon/log"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -45,6 +46,11 @@ type User struct {
 	Description string `json:"description,omitempty"`
 	Theme       Theme  `json:"theme,omitempty"`
 	IconHash    string `json:"icon_hash,omitempty"`
+}
+
+type IconModel struct {
+	UserID int64  `db:"user_id"`
+	Image  []byte `db:"image"`
 }
 
 type Theme struct {
@@ -435,4 +441,73 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 	}
 
 	return user, nil
+}
+
+func fillUserResponseV2(ctx context.Context, tx *sqlx.Tx, userModels []UserModel) (map[int64]User, error) {
+	if len(userModels) == 0 {
+		return map[int64]User{}, nil
+	}
+
+	userIds := make([]int64, len(userModels))
+	for i, userModel := range userModels {
+		userIds[i] = userModel.ID
+	}
+
+	rawThemeSql := "SELECT * FROM themes WHERE user_id IN (?)"
+	themeSql, args, _ := sqlx.In(rawThemeSql, userIds)
+
+	themeModels := []ThemeModel{}
+	if err := tx.SelectContext(ctx, &themeModels, themeSql, args...); err != nil {
+		log.Error("fail fillUserResponseV2: ", err)
+		return nil, err
+	}
+	userIdToThemes := make(map[int64]ThemeModel)
+	for _, themeModel := range themeModels {
+		userIdToThemes[themeModel.UserID] = themeModel
+	}
+
+	// image ------------------------------------------------------------
+	rawImageSql := "SELECT user_id, image FROM icons WHERE user_id IN (?)"
+	imageSql, args, _ := sqlx.In(rawImageSql, userIds)
+
+	iconModels := []IconModel{}
+	if err := tx.SelectContext(ctx, &iconModels, imageSql, args...); err != nil {
+		log.Error("fail fillUserResponseV2: ", err)
+		return nil, err
+	}
+	userIdToIcons := make(map[int64]IconModel)
+	for _, iconModel := range iconModels {
+		userIdToIcons[iconModel.UserID] = iconModel
+	}
+
+	fallbackImageData, err := os.ReadFile(fallbackImage)
+	if err != nil {
+		log.Error("fail fillUserResponseV2: ", err)
+		return nil, err
+	}
+
+	var userIdToUser = make(map[int64]User)
+	for _, userModel := range userModels {
+		var iconHash [32]byte
+		if icon, exists := userIdToIcons[userModel.ID]; exists {
+			iconHash = sha256.Sum256(icon.Image)
+		} else {
+			iconHash = sha256.Sum256(fallbackImageData)
+		}
+
+		user := User{
+			ID:          userModel.ID,
+			Name:        userModel.Name,
+			DisplayName: userModel.DisplayName,
+			Description: userModel.Description,
+			Theme: Theme{
+				ID:       userIdToThemes[userModel.ID].ID,
+				DarkMode: userIdToThemes[userModel.ID].DarkMode,
+			},
+			IconHash: fmt.Sprintf("%x", iconHash),
+		}
+		userIdToUser[userModel.ID] = user
+	}
+
+	return userIdToUser, nil
 }
