@@ -453,7 +453,7 @@ func fillUserResponseV2(ctx context.Context, tx *sqlx.Tx, userModels []UserModel
 	themeSql, args, _ := sqlx.In(rawThemeSql, userIds)
 
 	themeModels := []ThemeModel{}
-	if err := tx.SelectContext(ctx, &themeModels, themeSql, args); err != nil {
+	if err := tx.SelectContext(ctx, &themeModels, themeSql, args...); err != nil {
 		log.Error("fail fillUserResponseV2: ", err)
 		return nil, err
 	}
