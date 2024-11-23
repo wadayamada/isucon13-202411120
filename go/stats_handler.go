@@ -133,7 +133,7 @@ func getUserStatisticsHandler(c echo.Context) error {
 	}
 
 	query = `
-		SELECT u.id AS user_id, IFNULL(SUM(lc.tip), 0) AS total_tips 
+		SELECT u.id AS user_id, IFNULL(SUM(l2.tip), 0) AS total_tips 
 		FROM users u
 		INNER JOIN livestreams l ON l.user_id = u.id	
 		INNER JOIN livecomments l2 ON l2.livestream_id = l.id
