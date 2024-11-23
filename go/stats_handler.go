@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
 )
 
@@ -92,17 +93,55 @@ func getUserStatisticsHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get users: "+err.Error())
 	}
 
+	// すべてのユーザーのリアクション数を取得するクエリ
+	query := `
+	SELECT u.id AS user_id, COUNT(r.id) AS reactions_count
+	FROM users u
+	LEFT JOIN livestreams l ON l.user_id = u.id
+	LEFT JOIN reactions r ON r.livestream_id = l.id
+	WHERE u.id IN (?)
+	GROUP BY u.id
+	`
+
+	// ユーザーIDのリストを作成
+	userIDs := make([]int64, len(users))
+	for i, user := range users {
+		userIDs[i] = user.ID
+	}
+
+	// クエリを実行して結果を取得
+	type UserReactions struct {
+		UserID         int64 `db:"user_id"`
+		ReactionsCount int64 `db:"reactions_count"`
+	}
+
+	var userReactions []UserReactions
+	query, args, err := sqlx.In(query, userIDs)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to prepare query: "+err.Error())
+	}
+
+	if err := tx.SelectContext(ctx, &userReactions, query, args...); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to execute query: "+err.Error())
+	}
+
+	reactionCounts := make(map[int64]int64)
+	for _, ur := range userReactions {
+		reactionCounts[ur.UserID] = ur.ReactionsCount
+	}
+
 	var ranking UserRanking
 	for _, user := range users {
 		var reactions int64
-		query := `
-		SELECT COUNT(*) FROM users u
-		INNER JOIN livestreams l ON l.user_id = u.id
-		INNER JOIN reactions r ON r.livestream_id = l.id
-		WHERE u.id = ?`
-		if err := tx.GetContext(ctx, &reactions, query, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to count reactions: "+err.Error())
-		}
+		// query := `
+		// SELECT COUNT(*) FROM users u
+		// INNER JOIN livestreams l ON l.user_id = u.id
+		// INNER JOIN reactions r ON r.livestream_id = l.id
+		// WHERE u.id = ?`
+		// if err := tx.GetContext(ctx, &reactions, query, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		// 	return echo.NewHTTPError(http.StatusInternalServerError, "failed to count reactions: "+err.Error())
+		// }
+		reactions = reactionCounts[user.ID]
 
 		var tips int64
 		query = `
@@ -133,7 +172,7 @@ func getUserStatisticsHandler(c echo.Context) error {
 
 	// リアクション数
 	var totalReactions int64
-	query := `SELECT COUNT(*) FROM users u 
+	query = `SELECT COUNT(*) FROM users u 
     INNER JOIN livestreams l ON l.user_id = u.id 
     INNER JOIN reactions r ON r.livestream_id = l.id
     WHERE u.name = ?
