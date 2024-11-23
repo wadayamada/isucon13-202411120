@@ -431,7 +431,7 @@ func fillLivecommentResponse(ctx context.Context, tx *sqlx.Tx, livecommentModel 
 	if err := tx.GetContext(ctx, &livestreamModel, "SELECT * FROM livestreams WHERE id = ?", livecommentModel.LivestreamID); err != nil {
 		return Livecomment{}, err
 	}
-	livestream, err := fillLivestreamResponse(ctx, tx, livestreamModel)
+	livestream, err := fillLivestreamResponse(ctx, tx, []*LivestreamModel{&livestreamModel})
 	if err != nil {
 		return Livecomment{}, err
 	}
@@ -439,7 +439,7 @@ func fillLivecommentResponse(ctx context.Context, tx *sqlx.Tx, livecommentModel 
 	livecomment := Livecomment{
 		ID:         livecommentModel.ID,
 		User:       commentOwner,
-		Livestream: livestream,
+		Livestream: livestream[0],
 		Comment:    livecommentModel.Comment,
 		Tip:        livecommentModel.Tip,
 		CreatedAt:  livecommentModel.CreatedAt,
@@ -469,18 +469,36 @@ func fillLivecommentResponseV2(ctx context.Context, tx *sqlx.Tx, livecommentMode
 	}
 
 	livecomments := []Livecomment{}
+	livestreamIds := []int64{}
+	livestreamModels := []*LivestreamModel{}
+	livestreamIdToLivestreamMap := make(map[int64]*Livestream)
 	for _, livecommentModel := range livecommentModels {
-		livestreamModel := LivestreamModel{}
-		if err := tx.GetContext(ctx, &livestreamModel, "SELECT * FROM livestreams WHERE id = ?", livecommentModel.LivestreamID); err != nil {
-			log.Error("failed fillLivecommentResponseV2: ", err)
-			return []Livecomment{}, err
-		}
-		livestream, err := fillLivestreamResponse(ctx, tx, livestreamModel)
+		livestreamIds = append(livestreamIds, livecommentModel.LivestreamID)
+	}
+	if len(livestreamIds) != 0 {
+		query, params, err := sqlx.In("SELECT * FROM livestreams WHERE id IN (?)", livestreamIds)
 		if err != nil {
 			log.Error("failed fillLivecommentResponseV2: ", err)
 			return []Livecomment{}, err
 		}
-
+		if err := tx.SelectContext(ctx, &livestreamModels, query, params...); err != nil {
+			log.Error("failed fillLivecommentResponseV2: ", err)
+			return []Livecomment{}, err
+		}
+		livestreams, err := fillLivestreamResponse(ctx, tx, livestreamModels)
+		if err != nil {
+			log.Error("failed fillLivecommentResponseV2: ", err)
+			return []Livecomment{}, err
+		}
+		for _, livestream := range livestreams {
+			livestreamIdToLivestreamMap[livestream.ID] = &livestream
+		}
+	}
+	for _, livecommentModel := range livecommentModels {
+		livestream := Livestream{}
+		if res, ok := livestreamIdToLivestreamMap[livecommentModel.LivestreamID]; ok {
+			livestream = *res
+		}
 		livecomment := Livecomment{
 			ID:         livecommentModel.ID,
 			User:       commentOwnerMap[livecommentModel.UserID],
