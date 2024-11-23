@@ -490,7 +490,7 @@ func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModels [
 	if err != nil {
 		return livestreams, err
 	}
-	if err := tx.GetContext(ctx, &ownerModel, query, params...); err != nil {
+	if err := tx.SelectContext(ctx, &ownerModel, query, params...); err != nil {
 		return livestreams, err
 	}
 	for i := range ownerModel {
@@ -516,7 +516,7 @@ func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModels [
 	if err != nil {
 		return livestreams, err
 	}
-	if err := tx.GetContext(ctx, &tagModels, query, params...); err != nil {
+	if err := tx.SelectContext(ctx, &tagModels, query, params...); err != nil {
 		return livestreams, err
 	}
 	for _, tagModel := range tagModels {
