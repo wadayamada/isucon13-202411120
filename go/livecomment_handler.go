@@ -454,15 +454,17 @@ func fillLivecommentResponseV2(ctx context.Context, tx *sqlx.Tx, livecommentMode
 	for i, livecommentModel := range livecommentModels {
 		userIds[i] = livecommentModel.UserID
 	}
-	rawSql := "SELECT * FROM users WHERE id IN (?)"
-	sql, args, _ := sqlx.In(rawSql, userIds)
-	if err := tx.SelectContext(ctx, &commentOwnerModels, sql, args...); err != nil {
-		log.Error("failed to get users: ", err)
-		return []Livecomment{}, err
+	if len(userIds) != 0 {
+		rawSql := "SELECT * FROM users WHERE id IN (?)"
+		sql, args, _ := sqlx.In(rawSql, userIds)
+		if err := tx.SelectContext(ctx, &commentOwnerModels, sql, args...); err != nil {
+			log.Error("failed fillLivecommentResponseV2: ", err)
+			return []Livecomment{}, err
+		}
 	}
 	commentOwnerMap, err := fillUserResponseV2(ctx, tx, commentOwnerModels)
 	if err != nil {
-		log.Error("failed to get users: ", err)
+		log.Error("failed fillLivecommentResponseV2: ", err)
 		return []Livecomment{}, err
 	}
 
@@ -470,12 +472,12 @@ func fillLivecommentResponseV2(ctx context.Context, tx *sqlx.Tx, livecommentMode
 	for _, livecommentModel := range livecommentModels {
 		livestreamModel := LivestreamModel{}
 		if err := tx.GetContext(ctx, &livestreamModel, "SELECT * FROM livestreams WHERE id = ?", livecommentModel.LivestreamID); err != nil {
-			log.Error("failed to get users: ", err)
+			log.Error("failed fillLivecommentResponseV2: ", err)
 			return []Livecomment{}, err
 		}
 		livestream, err := fillLivestreamResponse(ctx, tx, livestreamModel)
 		if err != nil {
-			log.Error("failed to get users: ", err)
+			log.Error("failed fillLivecommentResponseV2: ", err)
 			return []Livecomment{}, err
 		}
 

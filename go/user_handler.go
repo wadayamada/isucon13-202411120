@@ -444,6 +444,10 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 }
 
 func fillUserResponseV2(ctx context.Context, tx *sqlx.Tx, userModels []UserModel) (map[int64]User, error) {
+	if len(userModels) == 0 {
+		return map[int64]User{}, nil
+	}
+
 	userIds := make([]int64, len(userModels))
 	for i, userModel := range userModels {
 		userIds[i] = userModel.ID
