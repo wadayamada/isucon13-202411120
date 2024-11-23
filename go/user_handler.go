@@ -116,6 +116,7 @@ func getIconHandler(c echo.Context) error {
 	} else {
 		if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", user.ID); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
+				image, _ = os.ReadFile(fallbackImage)
 				return c.File(fallbackImage)
 			} else {
 				return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user icon: "+err.Error())
