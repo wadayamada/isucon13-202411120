@@ -506,7 +506,7 @@ func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModels [
 		return livestreams, err
 	}
 	for i := range livestreamTagModels {
-		livestreamIdToLiveStreamTagsMap[livestreamTagModels[i].ID] = append(livestreamIdToLiveStreamTagsMap[livestreamTagModels[i].LivestreamID], livestreamTagModels[i])
+		livestreamIdToLiveStreamTagsMap[livestreamTagModels[i].LivestreamID] = append(livestreamIdToLiveStreamTagsMap[livestreamTagModels[i].LivestreamID], livestreamTagModels[i])
 		tagIdList = append(tagIdList, livestreamTagModels[i].TagID)
 	}
 
