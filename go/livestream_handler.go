@@ -478,10 +478,10 @@ func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModels [
 	var userIdList []int64
 	userIdToUserModelMap := make(map[int64]UserModel)
 	var livestreamIDList []int64
-	livestreamIdToLiveStreamTagsMap := map[int64][]*LivestreamTagModel{}
+	livestreamIdToLiveStreamTagsMap := make(map[int64][]*LivestreamTagModel)
 	var tagIdList []int64
 	tagIdToTagMap := make(map[int64]Tag)
-	livestreamIdToTagsMap := map[int64][]Tag{}
+	livestreamIdToTagsMap := make(map[int64][]Tag)
 	for i := range livestreamModels {
 		userIdList = append(userIdList, livestreamModels[i].UserID)
 		livestreamIDList = append(livestreamIDList, livestreamModels[i].ID)
@@ -506,6 +506,10 @@ func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModels [
 		return livestreams, err
 	}
 
+	for i := range livestreamTagModels {
+		livestreamIdToTagsMap[livestreamTagModels[i].ID] = []Tag{}
+		livestreamIdToLiveStreamTagsMap[livestreamTagModels[i].ID] = []*LivestreamTagModel{}
+	}
 	for i := range livestreamTagModels {
 		livestreamIdToLiveStreamTagsMap[livestreamTagModels[i].ID] = append(livestreamIdToLiveStreamTagsMap[livestreamTagModels[i].ID], livestreamTagModels[i])
 		tagIdList = append(tagIdList, livestreamTagModels[i].TagID)
