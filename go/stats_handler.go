@@ -9,6 +9,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/gommon/log"
 )
 
 type LivestreamStatistics struct {
@@ -118,6 +119,7 @@ func getUserStatisticsHandler(c echo.Context) error {
 	var userReactions []UserReactions
 	query, args, err := sqlx.In(query, userIDs)
 	if err != nil {
+		log.Error("failed getUserStatisticsHandler reaction: ", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to prepare query: "+err.Error())
 	}
 
@@ -145,6 +147,7 @@ func getUserStatisticsHandler(c echo.Context) error {
 
 	var userTips []UserTip
 	if err := tx.SelectContext(ctx, &userTips, query, args...); err != nil {
+		log.Error("failed getUserStatisticsHandler tips: ", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to execute query: "+err.Error())
 	}
 
