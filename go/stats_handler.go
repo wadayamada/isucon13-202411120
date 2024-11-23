@@ -9,6 +9,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/gommon/log"
 )
 
 type LivestreamStatistics struct {
@@ -97,8 +98,8 @@ func getUserStatisticsHandler(c echo.Context) error {
 	query := `
 	SELECT u.id AS user_id, COUNT(r.id) AS reactions_count
 	FROM users u
-	LEFT JOIN livestreams l ON l.user_id = u.id
-	LEFT JOIN reactions r ON r.livestream_id = l.id
+	INNER JOIN livestreams l ON l.user_id = u.id
+	INNER JOIN reactions r ON r.livestream_id = l.id
 	WHERE u.id IN (?)
 	GROUP BY u.id
 	`
@@ -118,6 +119,7 @@ func getUserStatisticsHandler(c echo.Context) error {
 	var userReactions []UserReactions
 	query, args, err := sqlx.In(query, userIDs)
 	if err != nil {
+		log.Error("failed getUserStatisticsHandler reaction: ", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to prepare query: "+err.Error())
 	}
 
@@ -128,6 +130,37 @@ func getUserStatisticsHandler(c echo.Context) error {
 	reactionCounts := make(map[int64]int64)
 	for _, ur := range userReactions {
 		reactionCounts[ur.UserID] = ur.ReactionsCount
+	}
+
+	query = `
+		SELECT u.id AS user_id, IFNULL(SUM(l2.tip), 0) AS total_tips 
+		FROM users u
+		INNER JOIN livestreams l ON l.user_id = u.id	
+		INNER JOIN livecomments l2 ON l2.livestream_id = l.id
+		WHERE u.id IN (?)
+		GROUP BY u.id;`
+
+	type UserTip struct {
+		UserID    int64 `db:"user_id"`
+		TotalTips int64 `db:"total_tips"`
+	}
+
+	var userTips []UserTip
+	query, args, err = sqlx.In(query, userIDs)
+	if err != nil {
+		log.Error("failed getUserStatisticsHandler tips: ", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to prepare query: "+err.Error())
+	}
+
+	if err := tx.SelectContext(ctx, &userTips, query, args...); err != nil {
+		log.Error("failed getUserStatisticsHandler tips: ", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to execute query: "+err.Error())
+	}
+
+	// 結果をマッピング
+	tipMap := make(map[int64]int64)
+	for _, ut := range userTips {
+		tipMap[ut.UserID] = ut.TotalTips
 	}
 
 	var ranking UserRanking
@@ -144,14 +177,15 @@ func getUserStatisticsHandler(c echo.Context) error {
 		reactions = reactionCounts[user.ID]
 
 		var tips int64
-		query = `
-		SELECT IFNULL(SUM(l2.tip), 0) FROM users u
-		INNER JOIN livestreams l ON l.user_id = u.id	
-		INNER JOIN livecomments l2 ON l2.livestream_id = l.id
-		WHERE u.id = ?`
-		if err := tx.GetContext(ctx, &tips, query, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to count tips: "+err.Error())
-		}
+		// query = `
+		// SELECT IFNULL(SUM(l2.tip), 0) FROM users u
+		// INNER JOIN livestreams l ON l.user_id = u.id
+		// INNER JOIN livecomments l2 ON l2.livestream_id = l.id
+		// WHERE u.id = ?`
+		// if err := tx.GetContext(ctx, &tips, query, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		// 	return echo.NewHTTPError(http.StatusInternalServerError, "failed to count tips: "+err.Error())
+		// }
+		tips = tipMap[user.ID]
 
 		score := reactions + tips
 		ranking = append(ranking, UserRankingEntry{
