@@ -29,7 +29,7 @@ const (
 	bcryptDefaultCost        = bcrypt.MinCost
 )
 
-var fallbackImage = "../img/NoImage.jpg"
+var fallbackImage, _ = os.ReadFile("../img/NoImage.jpg")
 
 type UserModel struct {
 	ID             int64  `db:"id"`
@@ -111,12 +111,10 @@ func getIconHandler(c echo.Context) error {
 	}
 
 	var image []byte
-	if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", user.ID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return c.File(fallbackImage)
-		} else {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user icon: "+err.Error())
-		}
+	if cached, found := IconCache.Load(username); found {
+		image = cached.([]byte)
+	} else {
+		image = fallbackImage
 	}
 
 	iconHash := sha256.Sum256(image)
@@ -169,6 +167,8 @@ func postIconHandler(c echo.Context) error {
 	if err := tx.Commit(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
 	}
+
+	IconCache.Store(sess.Values[defaultUsernameKey], req.Image)
 
 	return c.JSON(http.StatusCreated, &PostIconResponse{
 		ID: iconID,
@@ -417,14 +417,10 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 	}
 
 	var image []byte
-	if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", userModel.ID); err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
-			return User{}, err
-		}
-		image, err = os.ReadFile(fallbackImage)
-		if err != nil {
-			return User{}, err
-		}
+	if cached, found := IconCache.Load(userModel.Name); found {
+		image = cached.([]byte)
+	} else {
+		image = fallbackImage
 	}
 	iconHash := sha256.Sum256(image)
 
@@ -466,34 +462,15 @@ func fillUserResponseV2(ctx context.Context, tx *sqlx.Tx, userModels []UserModel
 		userIdToThemes[themeModel.UserID] = themeModel
 	}
 
-	// image ------------------------------------------------------------
-	rawImageSql := "SELECT user_id, image FROM icons WHERE user_id IN (?)"
-	imageSql, args, _ := sqlx.In(rawImageSql, userIds)
-
-	iconModels := []IconModel{}
-	if err := tx.SelectContext(ctx, &iconModels, imageSql, args...); err != nil {
-		log.Error("fail fillUserResponseV2: ", err)
-		return nil, err
-	}
-	userIdToIcons := make(map[int64]IconModel)
-	for _, iconModel := range iconModels {
-		userIdToIcons[iconModel.UserID] = iconModel
-	}
-
-	fallbackImageData, err := os.ReadFile(fallbackImage)
-	if err != nil {
-		log.Error("fail fillUserResponseV2: ", err)
-		return nil, err
-	}
-
 	var userIdToUser = make(map[int64]User)
 	for _, userModel := range userModels {
-		var iconHash [32]byte
-		if icon, exists := userIdToIcons[userModel.ID]; exists {
-			iconHash = sha256.Sum256(icon.Image)
+		var image []byte
+		if cached, found := IconCache.Load(userModel.Name); found {
+			image = cached.([]byte)
 		} else {
-			iconHash = sha256.Sum256(fallbackImageData)
+			image = fallbackImage
 		}
+		iconHash := sha256.Sum256(image)
 
 		user := User{
 			ID:          userModel.ID,
