@@ -512,23 +512,25 @@ func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModels [
 	}
 
 	var tagModels []*TagModel
-	query, params, err = sqlx.In("SELECT * FROM tags WHERE id IN (?)", tagIdList)
-	if err != nil {
-		return livestreams, err
-	}
-	if err := tx.SelectContext(ctx, &tagModels, query, params...); err != nil {
-		return livestreams, err
-	}
-	for _, tagModel := range tagModels {
-		tagIdToTagMap[tagModel.ID] = Tag{
-			ID:   tagModel.ID,
-			Name: tagModel.Name,
+	if len(tagIdList) != 0 {
+		query, params, err = sqlx.In("SELECT * FROM tags WHERE id IN (?)", tagIdList)
+		if err != nil {
+			return livestreams, err
 		}
-	}
+		if err := tx.SelectContext(ctx, &tagModels, query, params...); err != nil {
+			return livestreams, err
+		}
+		for _, tagModel := range tagModels {
+			tagIdToTagMap[tagModel.ID] = Tag{
+				ID:   tagModel.ID,
+				Name: tagModel.Name,
+			}
+		}
 
-	for livestreamId, models := range livestreamIdToLiveStreamTagsMap {
-		for _, model := range models {
-			livestreamIdToTagsMap[livestreamId] = append(livestreamIdToTagsMap[livestreamId], tagIdToTagMap[model.TagID])
+		for livestreamId, models := range livestreamIdToLiveStreamTagsMap {
+			for _, model := range models {
+				livestreamIdToTagsMap[livestreamId] = append(livestreamIdToTagsMap[livestreamId], tagIdToTagMap[model.TagID])
+			}
 		}
 	}
 
