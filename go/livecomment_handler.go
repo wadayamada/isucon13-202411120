@@ -13,6 +13,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/gommon/log"
 )
 
 type PostLivecommentRequest struct {
@@ -102,8 +103,10 @@ func getLivecommentsHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livecomments: "+err.Error())
 	}
 
-	livecomments := make([]Livecomment, len(livecommentModels))
-	livecomments, err = fillLivecommentResponseV2(ctx, tx, livecommentModels)
+	livecomments, err := fillLivecommentResponseV2(ctx, tx, livecommentModels)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to fil livecomments: "+err.Error())
+	}
 
 	if err := tx.Commit(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
@@ -454,10 +457,12 @@ func fillLivecommentResponseV2(ctx context.Context, tx *sqlx.Tx, livecommentMode
 	rawSql := "SELECT * FROM users WHERE id IN (?)"
 	sql, args, _ := sqlx.In(rawSql, userIds)
 	if err := tx.SelectContext(ctx, &commentOwnerModels, sql, args...); err != nil {
+		log.Error("failed to get users: ", err)
 		return []Livecomment{}, err
 	}
 	commentOwnerMap, err := fillUserResponseV2(ctx, tx, commentOwnerModels)
 	if err != nil {
+		log.Error("failed to get users: ", err)
 		return []Livecomment{}, err
 	}
 
@@ -465,10 +470,12 @@ func fillLivecommentResponseV2(ctx context.Context, tx *sqlx.Tx, livecommentMode
 	for _, livecommentModel := range livecommentModels {
 		livestreamModel := LivestreamModel{}
 		if err := tx.GetContext(ctx, &livestreamModel, "SELECT * FROM livestreams WHERE id = ?", livecommentModel.LivestreamID); err != nil {
+			log.Error("failed to get users: ", err)
 			return []Livecomment{}, err
 		}
 		livestream, err := fillLivestreamResponse(ctx, tx, livestreamModel)
 		if err != nil {
+			log.Error("failed to get users: ", err)
 			return []Livecomment{}, err
 		}
 
