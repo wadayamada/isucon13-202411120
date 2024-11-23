@@ -475,28 +475,34 @@ func fillLivecommentResponseV2(ctx context.Context, tx *sqlx.Tx, livecommentMode
 	for _, livecommentModel := range livecommentModels {
 		livestreamIds = append(livestreamIds, livecommentModel.LivestreamID)
 	}
-	query, params, err := sqlx.In("SELECT * FROM livestreams WHERE id IN (?)", livestreamIds)
-	if err != nil {
-		log.Error("failed fillLivecommentResponseV2: ", err)
-		return []Livecomment{}, err
-	}
-	if err := tx.SelectContext(ctx, &livestreamModels, query, params...); err != nil {
-		log.Error("failed fillLivecommentResponseV2: ", err)
-		return []Livecomment{}, err
-	}
-	livestreams, err := fillLivestreamResponse(ctx, tx, livestreamModels)
-	if err != nil {
-		log.Error("failed fillLivecommentResponseV2: ", err)
-		return []Livecomment{}, err
-	}
-	for _, livestream := range livestreams {
-		livestreamIdToLivestreamMap[livestream.ID] = &livestream
+	if len(livestreamIds) != 0 {
+		query, params, err := sqlx.In("SELECT * FROM livestreams WHERE id IN (?)", livestreamIds)
+		if err != nil {
+			log.Error("failed fillLivecommentResponseV2: ", err)
+			return []Livecomment{}, err
+		}
+		if err := tx.SelectContext(ctx, &livestreamModels, query, params...); err != nil {
+			log.Error("failed fillLivecommentResponseV2: ", err)
+			return []Livecomment{}, err
+		}
+		livestreams, err := fillLivestreamResponse(ctx, tx, livestreamModels)
+		if err != nil {
+			log.Error("failed fillLivecommentResponseV2: ", err)
+			return []Livecomment{}, err
+		}
+		for _, livestream := range livestreams {
+			livestreamIdToLivestreamMap[livestream.ID] = &livestream
+		}
 	}
 	for _, livecommentModel := range livecommentModels {
+		livestream := Livestream{}
+		if res, ok := livestreamIdToLivestreamMap[livecommentModel.LivestreamID]; ok {
+			livestream = *res
+		}
 		livecomment := Livecomment{
 			ID:         livecommentModel.ID,
 			User:       commentOwnerMap[livecommentModel.UserID],
-			Livestream: *livestreamIdToLivestreamMap[livecommentModel.LivestreamID],
+			Livestream: livestream,
 			Comment:    livecommentModel.Comment,
 			Tip:        livecommentModel.Tip,
 			CreatedAt:  livecommentModel.CreatedAt,
