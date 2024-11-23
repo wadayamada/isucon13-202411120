@@ -477,9 +477,11 @@ func fillLivecommentResponseV2(ctx context.Context, tx *sqlx.Tx, livecommentMode
 	}
 	query, params, err := sqlx.In("SELECT * FROM livestreams WHERE id IN (?)", livestreamIds)
 	if err != nil {
+		log.Error("failed fillLivecommentResponseV2: ", err)
 		return []Livecomment{}, err
 	}
 	if err := tx.SelectContext(ctx, &livestreamModels, query, params...); err != nil {
+		log.Error("failed fillLivecommentResponseV2: ", err)
 		return []Livecomment{}, err
 	}
 	livestreams, err := fillLivestreamResponse(ctx, tx, livestreamModels)
