@@ -468,7 +468,7 @@ func fillLivecommentResponseV2(ctx context.Context, tx *sqlx.Tx, livecommentMode
 		return []Livecomment{}, err
 	}
 
-	var livecomments []Livecomment
+	livecomments := []Livecomment{}
 	for _, livecommentModel := range livecommentModels {
 		livestreamModel := LivestreamModel{}
 		if err := tx.GetContext(ctx, &livestreamModel, "SELECT * FROM livestreams WHERE id = ?", livecommentModel.LivestreamID); err != nil {
