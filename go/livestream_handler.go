@@ -540,11 +540,15 @@ func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModels [
 			livestreams[i] = Livestream{}
 			return livestreams, err
 		}
+		tags := []Tag{}
+		if arr, ok := livestreamIdToTagsMap[livestreamModel.ID]; ok {
+			tags = arr
+		}
 		livestreams[i] = Livestream{
 			ID:           livestreamModel.ID,
 			Owner:        owner,
 			Title:        livestreamModel.Title,
-			Tags:         livestreamIdToTagsMap[livestreamModel.ID],
+			Tags:         tags,
 			Description:  livestreamModel.Description,
 			PlaylistUrl:  livestreamModel.PlaylistUrl,
 			ThumbnailUrl: livestreamModel.ThumbnailUrl,
