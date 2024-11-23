@@ -13,6 +13,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/gommon/log"
 )
 
 type ReserveLivestreamRequest struct {
@@ -487,9 +488,11 @@ func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModels [
 	}
 	query, params, err := sqlx.In("SELECT * FROM users WHERE id IN (?)", userIdList)
 	if err != nil {
+		log.Error("failed fillLivestreamResponse: ", err)
 		return livestreams, err
 	}
 	if err := tx.SelectContext(ctx, &ownerModel, query, params...); err != nil {
+		log.Error("failed fillLivestreamResponse: ", err)
 		return livestreams, err
 	}
 	for i := range ownerModel {
@@ -499,9 +502,11 @@ func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModels [
 	var livestreamTagModels []*LivestreamTagModel
 	query, params, err = sqlx.In("SELECT * FROM livestream_tags WHERE livestream_id IN (?)", livestreamIDList)
 	if err != nil {
+		log.Error("failed fillLivestreamResponse: ", err)
 		return livestreams, err
 	}
 	if err := tx.SelectContext(ctx, &livestreamTagModels, query, params...); err != nil {
+		log.Error("failed fillLivestreamResponse: ", err)
 		return livestreams, err
 	}
 	for i := range livestreamTagModels {
@@ -512,9 +517,11 @@ func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModels [
 	if len(tagIdList) != 0 {
 		query, params, err = sqlx.In("SELECT * FROM tags WHERE id IN (?)", tagIdList)
 		if err != nil {
+			log.Error("failed fillLivestreamResponse: ", err)
 			return livestreams, err
 		}
 		if err := tx.SelectContext(ctx, &tagModels, query, params...); err != nil {
+			log.Error("failed fillLivestreamResponse: ", err)
 			return livestreams, err
 		}
 		for _, tagModel := range tagModels {
@@ -531,6 +538,7 @@ func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModels [
 	for i, livestreamModel := range livestreamModels {
 		owner, err := fillUserResponse(ctx, tx, userIdToUserModelMap[livestreamModel.UserID])
 		if err != nil {
+			log.Error("failed fillLivestreamResponse: ", err)
 			return livestreams, err
 		}
 		tags := []Tag{}
