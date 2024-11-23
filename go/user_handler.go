@@ -47,6 +47,11 @@ type User struct {
 	IconHash    string `json:"icon_hash,omitempty"`
 }
 
+type IconModel struct {
+	UserID int64  `db:"user_id"`
+	Image  []byte `db:"image"`
+}
+
 type Theme struct {
 	ID       int64 `json:"id"`
 	DarkMode bool  `json:"dark_mode"`
@@ -435,4 +440,66 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 	}
 
 	return user, nil
+}
+
+func fillUserResponseV2(ctx context.Context, tx *sqlx.Tx, userModels []UserModel) (map[int64]User, error) {
+	userIds := make([]int64, len(userModels))
+	for i, userModel := range userModels {
+		userIds[i] = userModel.ID
+	}
+
+	rawThemeSql := "SELECT * FROM themes WHERE user_id IN (?)"
+	themeSql, args, _ := sqlx.In(rawThemeSql, userIds)
+
+	themeModels := []ThemeModel{}
+	if err := tx.SelectContext(ctx, &themeModels, themeSql, args); err != nil {
+		return nil, err
+	}
+	userIdToThemes := make(map[int64]ThemeModel)
+	for _, themeModel := range themeModels {
+		userIdToThemes[themeModel.UserID] = themeModel
+	}
+
+	// image ------------------------------------------------------------
+	rawImageSql := "SELECT user_id, image FROM icons WHERE user_id IN (?)"
+	imageSql, args, _ := sqlx.In(rawImageSql, userIds)
+
+	iconModels := []IconModel{}
+	if err := tx.SelectContext(ctx, &iconModels, imageSql, args...); err != nil {
+		return nil, err
+	}
+	userIdToIcons := make(map[int64]IconModel)
+	for _, iconModel := range iconModels {
+		userIdToIcons[iconModel.UserID] = iconModel
+	}
+
+	fallbackImageData, err := os.ReadFile(fallbackImage)
+	if err != nil {
+		return nil, err
+	}
+
+	var userIdToUser = make(map[int64]User)
+	for _, userModel := range userModels {
+		var iconHash [32]byte
+		if icon, exists := userIdToIcons[userModel.ID]; exists {
+			iconHash = sha256.Sum256(icon.Image)
+		} else {
+			iconHash = sha256.Sum256(fallbackImageData)
+		}
+
+		user := User{
+			ID:          userModel.ID,
+			Name:        userModel.Name,
+			DisplayName: userModel.DisplayName,
+			Description: userModel.Description,
+			Theme: Theme{
+				ID:       userIdToThemes[userModel.ID].ID,
+				DarkMode: userIdToThemes[userModel.ID].DarkMode,
+			},
+			IconHash: fmt.Sprintf("%x", iconHash),
+		}
+		userIdToUser[userModel.ID] = user
+	}
+
+	return userIdToUser, nil
 }

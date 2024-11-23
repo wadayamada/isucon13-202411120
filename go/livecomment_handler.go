@@ -103,14 +103,7 @@ func getLivecommentsHandler(c echo.Context) error {
 	}
 
 	livecomments := make([]Livecomment, len(livecommentModels))
-	for i := range livecommentModels {
-		livecomment, err := fillLivecommentResponse(ctx, tx, livecommentModels[i])
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fil livecomments: "+err.Error())
-		}
-
-		livecomments[i] = livecomment
-	}
+	livecomments, err = fillLivecommentResponseV2(ctx, tx, livecommentModels)
 
 	if err := tx.Commit(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
@@ -450,6 +443,46 @@ func fillLivecommentResponse(ctx context.Context, tx *sqlx.Tx, livecommentModel 
 	}
 
 	return livecomment, nil
+}
+
+func fillLivecommentResponseV2(ctx context.Context, tx *sqlx.Tx, livecommentModels []LivecommentModel) ([]Livecomment, error) {
+	commentOwnerModels := []UserModel{}
+	userIds := make([]int64, len(livecommentModels))
+	for i, livecommentModel := range livecommentModels {
+		userIds[i] = livecommentModel.UserID
+	}
+	rawSql := "SELECT * FROM users WHERE id IN (?)"
+	sql, args, _ := sqlx.In(rawSql, userIds)
+	if err := tx.SelectContext(ctx, &commentOwnerModels, sql, args...); err != nil {
+		return []Livecomment{}, err
+	}
+	commentOwnerMap, err := fillUserResponseV2(ctx, tx, commentOwnerModels)
+	if err != nil {
+		return []Livecomment{}, err
+	}
+
+	var livecomments []Livecomment
+	for _, livecommentModel := range livecommentModels {
+		livestreamModel := LivestreamModel{}
+		if err := tx.GetContext(ctx, &livestreamModel, "SELECT * FROM livestreams WHERE id = ?", livecommentModel.LivestreamID); err != nil {
+			return []Livecomment{}, err
+		}
+		livestream, err := fillLivestreamResponse(ctx, tx, livestreamModel)
+		if err != nil {
+			return []Livecomment{}, err
+		}
+
+		livecomment := Livecomment{
+			ID:         livecommentModel.ID,
+			User:       commentOwnerMap[livecommentModel.UserID],
+			Livestream: livestream,
+			Comment:    livecommentModel.Comment,
+			Tip:        livecommentModel.Tip,
+			CreatedAt:  livecommentModel.CreatedAt,
+		}
+		livecomments = append(livecomments, livecomment)
+	}
+	return livecomments, nil
 }
 
 func fillLivecommentReportResponse(ctx context.Context, tx *sqlx.Tx, reportModel LivecommentReportModel) (LivecommentReport, error) {
