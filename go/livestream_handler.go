@@ -151,11 +151,20 @@ func reserveLivestreamHandler(c echo.Context) error {
 
 	// タグ追加
 	for _, tagID := range req.Tags {
-		if _, err := tx.NamedExecContext(ctx, "INSERT INTO livestream_tags (livestream_id, tag_id) VALUES (:livestream_id, :tag_id)", &LivestreamTagModel{
+		_, err := tx.NamedExecContext(ctx, "INSERT INTO livestream_tags (livestream_id, tag_id) VALUES (:livestream_id, :tag_id)", &LivestreamTagModel{
 			LivestreamID: livestreamID,
 			TagID:        tagID,
-		}); err != nil {
+		})
+		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to insert livestream tag: "+err.Error())
+		}
+
+		if cached, found := LiveStreamTagsCache.Load(livestreamID); found {
+			cached = append(cached.([]*LivestreamTagModel), &LivestreamTagModel{
+				LivestreamID: livestreamID,
+				TagID:        tagID,
+			})
+			LiveStreamTagsCache.Store(livestreamID, cached)
 		}
 	}
 
@@ -499,16 +508,34 @@ func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModels [
 		userIdToUserModelMap[ownerModel[i].ID] = ownerModel[i]
 	}
 
-	var livestreamTagModels []*LivestreamTagModel
-	query, params, err = sqlx.In("SELECT * FROM livestream_tags WHERE livestream_id IN (?)", livestreamIDList)
-	if err != nil {
-		log.Error("failed fillLivestreamResponse: ", err)
-		return livestreams, err
+	// 先にここでキャッシュから引けるものは引いて、livestreamIdListからremoveする
+	cachedLivestreamTagModelList, livestreamIDList := getLivestreamTagsFromCache(livestreamIDList)
+
+	livestreamTagModels := []*LivestreamTagModel{}
+	if len(livestreamIDList) != 0 {
+		query, params, err = sqlx.In("SELECT * FROM livestream_tags WHERE livestream_id IN (?)", livestreamIDList)
+		if err != nil {
+			log.Error("failed fillLivestreamResponse: ", err)
+			return livestreams, err
+		}
+		if err := tx.SelectContext(ctx, &livestreamTagModels, query, params...); err != nil {
+			log.Error("failed fillLivestreamResponse: ", err)
+			return livestreams, err
+		}
+
+		// cacheの更新
+		var cachedLivestreamTagModelMap = make(map[int64][]*LivestreamTagModel)
+		for _, livestreamTagModel := range livestreamTagModels {
+			cachedLivestreamTagModelMap[livestreamTagModel.LivestreamID] = append(cachedLivestreamTagModelMap[livestreamTagModel.LivestreamID], livestreamTagModel)
+		}
+		for livestreamID, cachedLivestreamTagModelList := range cachedLivestreamTagModelMap {
+			LiveStreamTagsCache.Store(livestreamID, cachedLivestreamTagModelList)
+		}
 	}
-	if err := tx.SelectContext(ctx, &livestreamTagModels, query, params...); err != nil {
-		log.Error("failed fillLivestreamResponse: ", err)
-		return livestreams, err
-	}
+
+	// がっちゃんこ
+	livestreamTagModels = append(livestreamTagModels, cachedLivestreamTagModelList...)
+
 	for i := range livestreamTagModels {
 		tagIdList = append(tagIdList, livestreamTagModels[i].TagID)
 	}
@@ -558,4 +585,18 @@ func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModels [
 		}
 	}
 	return livestreams, nil
+}
+
+func getLivestreamTagsFromCache(livestreamIDList []int64) ([]*LivestreamTagModel, []int64) {
+	var cachedLivestreamTagModelList []*LivestreamTagModel
+	var remainingLivestreamIDList []int64
+	for _, livestreamID := range livestreamIDList {
+		if cached, found := LiveStreamTagsCache.Load(livestreamID); found {
+			cachedLivestreamTagModelList = append(cachedLivestreamTagModelList, cached.([]*LivestreamTagModel)...)
+		} else {
+			remainingLivestreamIDList = append(remainingLivestreamIDList, livestreamID)
+		}
+	}
+
+	return cachedLivestreamTagModelList, remainingLivestreamIDList
 }

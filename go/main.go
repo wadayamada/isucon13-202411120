@@ -33,6 +33,7 @@ var (
 	dbConn                   *sqlx.DB
 	secret                   = []byte("isucon13_session_cookiestore_defaultsecret")
 	IconCache                sync.Map
+	LiveStreamTagsCache      sync.Map // map[livestream_id][]*LiveStreamTagModel
 )
 
 func init() {
