@@ -11,6 +11,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/gommon/log"
 )
 
 type ReactionModel struct {
@@ -65,15 +66,9 @@ func getReactionsHandler(c echo.Context) error {
 	if err := tx.SelectContext(ctx, &reactionModels, query, livestreamID); err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "failed to get reactions")
 	}
-
-	reactions := make([]Reaction, len(reactionModels))
-	for i := range reactionModels {
-		reaction, err := fillReactionResponse(ctx, tx, reactionModels[i])
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill reaction: "+err.Error())
-		}
-
-		reactions[i] = reaction
+	reactions, err := fillReactionResponse(ctx, tx, reactionModels)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill reaction: "+err.Error())
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -128,8 +123,10 @@ func postReactionHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get last inserted reaction id: "+err.Error())
 	}
 	reactionModel.ID = reactionID
+	reactionModels := []ReactionModel{}
+	reactionModels = append(reactionModels, reactionModel)
 
-	reaction, err := fillReactionResponse(ctx, tx, reactionModel)
+	reactions, err := fillReactionResponse(ctx, tx, reactionModels)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill reaction: "+err.Error())
 	}
@@ -138,35 +135,58 @@ func postReactionHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
 	}
 
-	return c.JSON(http.StatusCreated, reaction)
+	return c.JSON(http.StatusCreated, reactions[0])
 }
 
-func fillReactionResponse(ctx context.Context, tx *sqlx.Tx, reactionModel ReactionModel) (Reaction, error) {
-	userModel := UserModel{}
-	if err := tx.GetContext(ctx, &userModel, "SELECT * FROM users WHERE id = ?", reactionModel.UserID); err != nil {
-		return Reaction{}, err
+func fillReactionResponse(ctx context.Context, tx *sqlx.Tx, reactionModels []ReactionModel) ([]Reaction, error) {
+	reactionOwnerModels := []UserModel{}
+	userIds := make([]int64, len(reactionModels))
+	livestreamIds := make([]int64, len(reactionModels))
+	for i, reactionModel := range reactionModels {
+		userIds[i] = reactionModel.UserID
+		livestreamIds[i] = reactionModel.LivestreamID
 	}
-	user, err := fillUserResponse(ctx, tx, userModel)
+	if len(userIds) != 0 {
+		rawSql := "SELECT * FROM users WHERE id IN (?)"
+		sql, args, _ := sqlx.In(rawSql, userIds)
+		if err := tx.SelectContext(ctx, &reactionOwnerModels, sql, args...); err != nil {
+			log.Error("failed fillReactionResponse: ", err)
+			return []Reaction{}, err
+		}
+	}
+	reactionOwnerMap, err := fillUserResponseV2(ctx, tx, reactionOwnerModels)
 	if err != nil {
-		return Reaction{}, err
+		log.Error("failed fillReactionResponse: ", err)
+		return []Reaction{}, err
+	}
+	livestreamModels := []*LivestreamModel{}
+	livestreamIdToLivestreamMap := make(map[int64]Livestream)
+	if len(livestreamIds) != 0 {
+		sql, args, _ := sqlx.In("SELECT * FROM livestreams WHERE id IN (?)", livestreamIds)
+		if err := tx.SelectContext(ctx, &livestreamModels, sql, args...); err != nil {
+			log.Error("failed fillReactionResponse: ", err)
+			return []Reaction{}, err
+		}
+		livestreams, err := fillLivestreamResponse(ctx, tx, livestreamModels)
+		if err != nil {
+			log.Error("failed fillReactionResponse: ", err)
+			return []Reaction{}, err
+		}
+		for _, livestream := range livestreams {
+			livestreamIdToLivestreamMap[livestream.ID] = livestream
+		}
+	}
+	reactions := []Reaction{}
+	for _, reactionModel := range reactionModels {
+		reaction := Reaction{
+			ID:         reactionModel.ID,
+			EmojiName:  reactionModel.EmojiName,
+			User:       reactionOwnerMap[reactionModel.UserID],
+			Livestream: livestreamIdToLivestreamMap[reactionModel.LivestreamID],
+			CreatedAt:  reactionModel.CreatedAt,
+		}
+		reactions = append(reactions, reaction)
 	}
 
-	livestreamModel := LivestreamModel{}
-	if err := tx.GetContext(ctx, &livestreamModel, "SELECT * FROM livestreams WHERE id = ?", reactionModel.LivestreamID); err != nil {
-		return Reaction{}, err
-	}
-	livestreams, err := fillLivestreamResponse(ctx, tx, []*LivestreamModel{&livestreamModel})
-	if err != nil {
-		return Reaction{}, err
-	}
-
-	reaction := Reaction{
-		ID:         reactionModel.ID,
-		EmojiName:  reactionModel.EmojiName,
-		User:       user,
-		Livestream: livestreams[0],
-		CreatedAt:  reactionModel.CreatedAt,
-	}
-
-	return reaction, nil
+	return reactions, nil
 }
