@@ -108,5 +108,6 @@ CREATE TABLE `reactions` (
   `livestream_id` BIGINT NOT NULL,
   -- :innocent:, :tada:, etc...
   `emoji_name` VARCHAR(255) NOT NULL,
-  `created_at` BIGINT NOT NULL
+  `created_at` BIGINT NOT NULL,
+  KEY livestream_id(livestream_id)
 ) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
