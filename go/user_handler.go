@@ -159,7 +159,7 @@ func postIconHandler(c echo.Context) error {
 	}
 
 	IconCache.Store(sess.Values[defaultUsernameKey], req.Image)
-	IconCache.Store(sess.Values[defaultUsernameKey], sha256.Sum256(req.Image))
+	IconHashCache.Store(sess.Values[defaultUsernameKey], sha256.Sum256(req.Image))
 
 	return c.JSON(http.StatusCreated, &PostIconResponse{
 		ID: iconID,
