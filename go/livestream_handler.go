@@ -474,7 +474,7 @@ func getLivecommentReportsHandler(c echo.Context) error {
 
 func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModels []*LivestreamModel) ([]Livestream, error) {
 	livestreams := make([]Livestream, len(livestreamModels))
-	var ownerModel []UserModel
+	ownerModel := []UserModel{}
 	var userIdList []int64
 	userIdToUserModelMap := make(map[int64]UserModel)
 	var livestreamIDList []int64
@@ -485,17 +485,19 @@ func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModels [
 		userIdList = append(userIdList, livestreamModels[i].UserID)
 		livestreamIDList = append(livestreamIDList, livestreamModels[i].ID)
 	}
-	query, params, err := sqlx.In("SELECT * FROM users WHERE id IN (?)", userIdList)
-	if err != nil {
-		log.Error("failed fillLivestreamResponse: ", err)
-		return livestreams, err
-	}
-	if err := tx.SelectContext(ctx, &ownerModel, query, params...); err != nil {
-		log.Error("failed fillLivestreamResponse: ", err)
-		return livestreams, err
-	}
-	for i := range ownerModel {
-		userIdToUserModelMap[ownerModel[i].ID] = ownerModel[i]
+	if len(userIdList) != 0 {
+		query, params, err := sqlx.In("SELECT * FROM users WHERE id IN (?)", userIdList)
+		if err != nil {
+			log.Error("failed fillLivestreamResponse: ", err)
+			return livestreams, err
+		}
+		if err := tx.SelectContext(ctx, &ownerModel, query, params...); err != nil {
+			log.Error("failed fillLivestreamResponse: ", err)
+			return livestreams, err
+		}
+		for i := range ownerModel {
+			userIdToUserModelMap[ownerModel[i].ID] = ownerModel[i]
+		}
 	}
 
 	// 先にここでキャッシュから引けるものは引いて、livestreamIdListからremoveする
@@ -503,7 +505,7 @@ func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModels [
 
 	livestreamTagModels := []*LivestreamTagModel{}
 	if len(livestreamIDList) != 0 {
-		query, params, err = sqlx.In("SELECT * FROM livestream_tags WHERE livestream_id IN (?)", livestreamIDList)
+		query, params, err := sqlx.In("SELECT * FROM livestream_tags WHERE livestream_id IN (?)", livestreamIDList)
 		if err != nil {
 			log.Error("failed fillLivestreamResponse: ", err)
 			return livestreams, err
@@ -532,7 +534,7 @@ func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModels [
 
 	var tagModels []*TagModel
 	if len(tagIdList) != 0 {
-		query, params, err = sqlx.In("SELECT * FROM tags WHERE id IN (?)", tagIdList)
+		query, params, err := sqlx.In("SELECT * FROM tags WHERE id IN (?)", tagIdList)
 		if err != nil {
 			log.Error("failed fillLivestreamResponse: ", err)
 			return livestreams, err
