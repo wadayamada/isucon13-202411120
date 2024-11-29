@@ -35,6 +35,7 @@ var (
 	dbConn                   *sqlx.DB
 	secret                   = []byte("isucon13_session_cookiestore_defaultsecret")
 	IconCache                sync.Map
+	IconHashCache            sync.Map
 	LiveStreamTagsCache      sync.Map // map[livestream_id][]*LiveStreamTagModel
 )
 
@@ -114,6 +115,7 @@ func connectDB(logger echo.Logger) (*sqlx.DB, error) {
 
 func initializeHandler(c echo.Context) error {
 	IconCache = sync.Map{}
+	IconHashCache = sync.Map{}
 	LiveStreamTagsCache = sync.Map{}
 
 	if out, err := exec.Command("../sql/init.sh").CombinedOutput(); err != nil {

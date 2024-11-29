@@ -101,7 +101,13 @@ func getIconHandler(c echo.Context) error {
 		image = fallbackImage
 	}
 
-	iconHash := sha256.Sum256(image)
+	var iconHash [32]byte
+	if cached, found := IconHashCache.Load(username); found {
+		iconHash = cached.([32]byte)
+	} else {
+		iconHash := sha256.Sum256(image)
+		IconHashCache.Store(username, iconHash)
+	}
 
 	if c.Request().Header.Get("If-None-Match") == fmt.Sprintf("%x", iconHash) {
 		return c.NoContent(http.StatusNotModified)
@@ -153,6 +159,7 @@ func postIconHandler(c echo.Context) error {
 	}
 
 	IconCache.Store(sess.Values[defaultUsernameKey], req.Image)
+	IconCache.Store(sess.Values[defaultUsernameKey], sha256.Sum256(req.Image))
 
 	return c.JSON(http.StatusCreated, &PostIconResponse{
 		ID: iconID,
@@ -406,7 +413,13 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 	} else {
 		image = fallbackImage
 	}
-	iconHash := sha256.Sum256(image)
+	var iconHash [32]byte
+	if cached, found := IconHashCache.Load(userModel.Name); found {
+		iconHash = cached.([32]byte)
+	} else {
+		iconHash := sha256.Sum256(image)
+		IconHashCache.Store(userModel.Name, iconHash)
+	}
 
 	user := User{
 		ID:          userModel.ID,
@@ -454,7 +467,13 @@ func fillUserResponseV2(ctx context.Context, tx *sqlx.Tx, userModels []UserModel
 		} else {
 			image = fallbackImage
 		}
-		iconHash := sha256.Sum256(image)
+		var iconHash [32]byte
+		if cached, found := IconHashCache.Load(userModel.Name); found {
+			iconHash = cached.([32]byte)
+		} else {
+			iconHash := sha256.Sum256(image)
+			IconHashCache.Store(userModel.Name, iconHash)
+		}
 
 		user := User{
 			ID:          userModel.ID,
