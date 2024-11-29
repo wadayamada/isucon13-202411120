@@ -534,7 +534,7 @@ func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModels [
 
 	var tagModels []*TagModel
 	if len(tagIdList) != 0 {
-		query, params, err = sqlx.In("SELECT * FROM tags WHERE id IN (?)", tagIdList)
+		query, params, err := sqlx.In("SELECT * FROM tags WHERE id IN (?)", tagIdList)
 		if err != nil {
 			log.Error("failed fillLivestreamResponse: ", err)
 			return livestreams, err
