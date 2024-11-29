@@ -30,6 +30,7 @@ const (
 )
 
 var fallbackImage, _ = os.ReadFile("../img/NoImage.jpg")
+var fallbackImageHash = sha256.Sum256(fallbackImage)
 
 type UserModel struct {
 	ID             int64  `db:"id"`
@@ -95,21 +96,20 @@ func getIconHandler(c echo.Context) error {
 	username := c.Param("username")
 
 	var image []byte
+	var iconHash [32]byte
 	if cached, found := IconCache.Load(username); found {
 		image = cached.([]byte)
+		if cached, found := IconHashCache.Load(username); found {
+			iconHash = cached.([32]byte)
+		} else {
+			iconHash = fallbackImageHash
+		}
 	} else {
 		image = fallbackImage
+		iconHash = fallbackImageHash
 	}
 
-	var iconHash [32]byte
-	if cached, found := IconHashCache.Load(username); found {
-		iconHash = cached.([32]byte)
-	} else {
-		iconHash := sha256.Sum256(image)
-		IconHashCache.Store(username, iconHash)
-	}
-
-	if c.Request().Header.Get("If-None-Match") == fmt.Sprintf("%x", iconHash) {
+	if c.Request().Header.Get("If-None-Match") == fmt.Sprintf("\"%x\"", iconHash) {
 		return c.NoContent(http.StatusNotModified)
 	}
 
@@ -407,18 +407,11 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 		return User{}, err
 	}
 
-	var image []byte
-	if cached, found := IconCache.Load(userModel.Name); found {
-		image = cached.([]byte)
-	} else {
-		image = fallbackImage
-	}
 	var iconHash [32]byte
 	if cached, found := IconHashCache.Load(userModel.Name); found {
 		iconHash = cached.([32]byte)
 	} else {
-		iconHash := sha256.Sum256(image)
-		IconHashCache.Store(userModel.Name, iconHash)
+		iconHash = fallbackImageHash
 	}
 
 	user := User{
@@ -461,18 +454,11 @@ func fillUserResponseV2(ctx context.Context, tx *sqlx.Tx, userModels []UserModel
 
 	var userIdToUser = make(map[int64]User)
 	for _, userModel := range userModels {
-		var image []byte
-		if cached, found := IconCache.Load(userModel.Name); found {
-			image = cached.([]byte)
-		} else {
-			image = fallbackImage
-		}
 		var iconHash [32]byte
 		if cached, found := IconHashCache.Load(userModel.Name); found {
 			iconHash = cached.([32]byte)
 		} else {
-			iconHash := sha256.Sum256(image)
-			IconHashCache.Store(userModel.Name, iconHash)
+			iconHash = fallbackImageHash
 		}
 
 		user := User{
