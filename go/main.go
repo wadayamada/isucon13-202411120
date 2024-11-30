@@ -5,7 +5,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 
@@ -20,7 +19,6 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
 
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo-contrib/session"
@@ -42,7 +40,7 @@ var (
 )
 
 func init() {
-	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+	// log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 	if secretKey, ok := os.LookupEnv("ISUCON13_SESSION_SECRETKEY"); ok {
 		secret = []byte(secretKey)
 	}
@@ -141,7 +139,7 @@ func main() {
 	e := echo.New()
 	e.Debug = false
 	e.Logger.SetLevel(echolog.OFF)
-	e.Use(middleware.Logger())
+	// e.Use(middleware.Logger())
 	cookieStore := sessions.NewCookieStore(secret)
 	cookieStore.Options.Domain = "*.u.isucon.local"
 	e.Use(session.Middleware(cookieStore))
