@@ -8,10 +8,12 @@ import (
 	"log"
 	"net"
 	"net/http"
-	_ "net/http/pprof"
+
+	// _ "net/http/pprof"
 	"os"
 	"os/exec"
-	"runtime"
+
+	// "runtime"
 	"strconv"
 	"sync"
 
@@ -130,11 +132,11 @@ func initializeHandler(c echo.Context) error {
 }
 
 func main() {
-	runtime.SetBlockProfileRate(1)
-	runtime.SetMutexProfileFraction(1)
-	go func() {
-		log.Println(http.ListenAndServe("0.0.0.0:6060", nil))
-	}()
+	// runtime.SetBlockProfileRate(1)
+	// runtime.SetMutexProfileFraction(1)
+	// go func() {
+	// 	log.Println(http.ListenAndServe("0.0.0.0:6060", nil))
+	// }()
 
 	e := echo.New()
 	e.Debug = true
